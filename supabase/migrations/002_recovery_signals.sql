@@ -1,0 +1,18 @@
+BEGIN;
+
+ALTER TABLE revenue_events
+ADD COLUMN IF NOT EXISTS failure_code TEXT;
+
+ALTER TABLE revenue_events
+ADD COLUMN IF NOT EXISTS mandate_status TEXT;
+
+ALTER TABLE revenue_events
+ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE revenue_events
+ADD COLUMN IF NOT EXISTS days_overdue INTEGER;
+
+ALTER TABLE revenue_events
+ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+COMMIT;

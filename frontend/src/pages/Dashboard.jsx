@@ -8,19 +8,30 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function loadDashboard() {
-      try {
-        const data = await getDashboard();
+  async function loadDashboard() {
+    try {
+      setError(null);
 
-        setDashboard(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+      const data = await getDashboard();
+
+      setDashboard(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  }
 
+  async function refreshDashboard() {
+    try {
+      const data = await getDashboard();
+
+      setDashboard(data);
+    } catch (err) {
+    }
+  }
+
+  useEffect(() => {
     loadDashboard();
   }, []);
 
@@ -37,6 +48,13 @@ function Dashboard() {
       <main className="dashboard">
         <h1>Unable to load dashboard</h1>
         <p>{error}</p>
+
+        <button
+          type="button"
+          onClick={loadDashboard}
+        >
+          Try again
+        </button>
       </main>
     );
   }
@@ -88,7 +106,9 @@ function Dashboard() {
         />
       </section>
 
-      <EventTable />
+      <EventTable
+        onRecoveryComplete={refreshDashboard}
+      />
     </main>
   );
 }

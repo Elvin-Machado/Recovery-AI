@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.dashboard import router as dashboard_router
-
+from app.routes.recovery import router as recovery_router
 
 app = FastAPI(
     title="RecoverAI API",
@@ -30,3 +30,5 @@ def root():
     return {
         "message": "RecoverAI API is running"
     }
+
+app.include_router(recovery_router)
