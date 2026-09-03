@@ -21,11 +21,62 @@ class ActionExecutor:
         if action == "human_review":
             return self._human_review(payment_data)
 
+        if action == "send_checkout_reminder":
+            return self._send_checkout_reminder(payment_data)
+
+        if action in ["send_payment_reminder", "second_payment_reminder", "final_payment_reminder", "escalate_receivable", "follow_up_after_broken_promise"]:
+            return self._simulate_b2b_action(action, payment_data)
+
         return {
             "status": "no_action",
             "action": "no_action",
             "amount_recovered": 0,
             "message": "No recovery action executed"
+        }
+
+    def _send_checkout_reminder(
+        self,
+        payment_data: dict
+    ) -> Dict:
+        out = payment_data.get("simulated_checkout_outcome", "pending")
+        if out == "recovered":
+            return {
+                "status": "success",
+                "action": "send_checkout_reminder",
+                "amount_recovered": payment_data.get("amount", 0)
+            }
+        elif out == "failed":
+            return {
+                "status": "failed",
+                "action": "send_checkout_reminder",
+                "amount_recovered": 0
+            }
+        
+        return {
+            "status": "pending_customer_action",
+            "action": "send_checkout_reminder",
+            "amount_recovered": 0
+        }
+
+    def _simulate_b2b_action(self, action: str, payment_data: dict) -> Dict:
+        out = payment_data.get("simulated_checkout_outcome", "ignored")
+        if out == "paid" or out == "recovered":
+            return {
+                "status": "success",
+                "action": action,
+                "amount_recovered": payment_data.get("amount", 0)
+            }
+        elif out == "promise_pending":
+            return {
+                "status": "pending_customer_action",
+                "action": action,
+                "amount_recovered": 0
+            }
+        
+        return {
+            "status": "failed", # Ignored/unpaid -> failed attempt
+            "action": action,
+            "amount_recovered": 0
         }
 
     def _controlled_retry(
@@ -35,14 +86,14 @@ class ActionExecutor:
 
         amount = payment_data["amount"]
 
-        # Test-mode simulation.
-        # We will replace this with the actual
-        # Razorpay test-mode integration later.
+        failure_code = payment_data.get("failure_code")
+        mandate_status = payment_data.get("mandate_status")
+        attempt_count = payment_data.get("attempt_count", 0)
 
         simulated_success = (
-            payment_data["failure_code"]
-            == "insufficient_funds"
-            and payment_data["attempt_count"] < 3
+            failure_code in {"insufficient_funds", "temporary_decline"}
+            and mandate_status not in {"revoked", "inactive", "cancelled"}
+            and attempt_count < 3
         )
 
         if simulated_success:

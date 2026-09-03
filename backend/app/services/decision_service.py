@@ -1,10 +1,34 @@
 def recommend_action(
     diagnosis: str,
-    recovery_probability: float
+    recovery_probability: float,
+    payment_data: dict = None
 ) -> str:
 
-    if diagnosis == "mandate_revoked":
+    if not payment_data:
+        payment_data = {}
+
+    if diagnosis == "invoice_overdue":
+        attempt = payment_data.get("attempt_count", 0)
+        if attempt == 0:
+            return "send_payment_reminder"
+        elif attempt == 1:
+            return "second_payment_reminder"
+        elif attempt == 2:
+            return "final_payment_reminder"
+        else:
+            return "escalate_receivable"
+
+    if diagnosis == "promise_broken":
+        return "follow_up_after_broken_promise"
+
+    if diagnosis == "checkout_abandonment":
+        return "send_checkout_reminder"
+
+    if diagnosis == "mandate_revoked" or payment_data.get("mandate_status") == "revoked":
         return "reactivation"
+
+    if payment_data.get("mandate_status") in {"inactive", "cancelled"}:
+        return "payment_method_update"
 
     if diagnosis == "soft_decline":
         if recovery_probability >= 0.30:

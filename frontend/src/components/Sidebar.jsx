@@ -1,3 +1,5 @@
+import { NavLink } from "react-router-dom";
+
 function Sidebar() {
   return (
     <aside className="sidebar">
@@ -11,30 +13,50 @@ function Sidebar() {
       </div>
 
       <nav className="sidebar__nav">
-        <a href="#" className="sidebar__link sidebar__link--active">
+        <NavLink to="/dashboard" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
           <span>◉</span>
           Dashboard
-        </a>
+        </NavLink>
 
-        <a href="#" className="sidebar__link">
+        <NavLink to="/transactions" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
           <span>◈</span>
-          Revenue Risk
-        </a>
+          Transactions
+        </NavLink>
 
-        <a href="#" className="sidebar__link">
+        <NavLink to="/queue" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
           <span>↗</span>
-          Recovery
-        </a>
+          Recovery Queue
+        </NavLink>
 
-        <a href="#" className="sidebar__link">
+        <NavLink to="/customers" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
           <span>◇</span>
-          Decisions
-        </a>
+          Customers
+        </NavLink>
 
-        <a href="#" className="sidebar__link">
+        <NavLink to="/subscriptions" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
           <span>≡</span>
-          Audit Trail
-        </a>
+          Subscriptions
+        </NavLink>
+
+        <NavLink to="/receivables" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
+          <span>◎</span>
+          Receivables
+        </NavLink>
+
+        <NavLink to="/promises" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
+          <span>○</span>
+          Promises
+        </NavLink>
+
+        <NavLink to="/simulator" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
+          <span>◓</span>
+          Simulator
+        </NavLink>
+
+        <NavLink to="/analytics" className={({ isActive }) => `sidebar__link ${isActive ? "sidebar__link--active" : ""}`}>
+          <span>◩</span>
+          Analytics
+        </NavLink>
       </nav>
 
       <div className="sidebar__footer">

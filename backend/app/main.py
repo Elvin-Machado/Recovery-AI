@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.dashboard import router as dashboard_router
 from app.routes.recovery import router as recovery_router
+from app.routes.webhooks import router as webhooks_router
+from app.routes.simulator import router as simulator_router
+from app.routes.promises import router as promises_router
+from app.routes.analytics import router as analytics_router
 
 app = FastAPI(
     title="RecoverAI API",
@@ -23,7 +27,9 @@ app.add_middleware(
 
 
 app.include_router(dashboard_router)
-
+app.include_router(simulator_router)
+app.include_router(promises_router)
+app.include_router(analytics_router)
 
 @app.get("/")
 def root():
@@ -32,3 +38,4 @@ def root():
     }
 
 app.include_router(recovery_router)
+app.include_router(webhooks_router)

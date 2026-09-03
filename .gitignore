@@ -1,25 +1,42 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-
-# Virtual environment
+*$py.class
+*.so
+.Python
 .venv/
 venv/
+ENV/
 env/
 
 # Environment variables
 .env
 .env.*
+!.env.example
 
-# ML artifacts
-# Keep the trained model if we want it versioned
-# recovery_model.joblib
+# ML artifacts & dataset outputs
+*.csv
+ml_audit_results.json
 
-# Node
+# Node / Frontend
 node_modules/
 dist/
+dist-ssr/
+*.local
+.npm
 
-# OS
+# Temp files & debug scripts
+*_out*.txt
+old_*.txt
+patch*.py
+fix_*.py
+run_temp.py
+
+# IDE & OS
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db

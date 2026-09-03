@@ -5,6 +5,7 @@ from app.services.persistence_service import persistence_service
 def _run_recovery_agent(event: dict) -> dict:
     return recovery_agent.process(
         {
+            "event_type": event.get("event_type", ""),
             "amount": event["amount"],
             "attempt_count": event.get("attempt_count", 0),
             "previous_successful_payments": event.get(
@@ -14,6 +15,9 @@ def _run_recovery_agent(event: dict) -> dict:
                 "days_since_last_payment", 0
             ),
             "failure_code": event.get("failure_code"),
+            "mandate_status": event.get("mandate_status"),
+            "current_status": event.get("current_status"),
+            "simulated_checkout_outcome": event.get("simulated_checkout_outcome"),
         }
     )
 
@@ -32,8 +36,9 @@ def _persist_workflow(
         category=agent_result["diagnosis"],
         confidence=agent_result["recovery_probability"],
         reason=(
-            f"Model predicted recovery probability "
-            f"{agent_result['recovery_probability']:.4f}"
+            f"Model predicted recovery probability {agent_result['recovery_probability']:.4f}"
+            if agent_result["recovery_probability"] is not None
+            else "AI prediction unavailable for this event type. Deterministic policy evaluation applied."
         ),
         model_version="recovery-model-v1",
     )

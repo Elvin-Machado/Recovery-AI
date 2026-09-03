@@ -24,14 +24,16 @@ class RecoveryAgent:
         # 3. Determine recommended intervention
         recommended_action = recommend_action(
             diagnosis,
-            recovery_probability
+            recovery_probability,
+            payment_data
         )
 
         # 4. Check whether the action is allowed
         policy_result = check_policy(
             diagnosis,
             recommended_action,
-            payment_data["attempt_count"]
+            payment_data["attempt_count"],
+            payment_data
         )
 
         # 5. Execute ONLY if policy allows it

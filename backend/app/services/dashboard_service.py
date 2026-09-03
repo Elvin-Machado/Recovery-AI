@@ -84,6 +84,42 @@ def get_recent_events(limit: int = 20):
             for customer in (customer_response.data or [])
         }
 
+    event_ids = [ev["id"] for ev in revenue_events]
+
+    diagnoses = {}
+    if event_ids:
+        diag_resp = supabase.table("diagnoses").select("*").in_("revenue_event_id", event_ids).execute()
+        for d in (diag_resp.data or []):
+            if d.get("revenue_event_id"):
+                diagnoses[d["revenue_event_id"]] = d
+
+    decisions = {}
+    dec_id_to_rev_id = {}
+    if event_ids:
+        dec_resp = supabase.table("decisions").select("*").in_("revenue_event_id", event_ids).execute()
+        for d in (dec_resp.data or []):
+            if d.get("revenue_event_id"):
+                decisions[d["revenue_event_id"]] = d
+                dec_id_to_rev_id[d["id"]] = d["revenue_event_id"]
+
+    actions = {}
+    act_id_to_rev_id = {}
+    if dec_id_to_rev_id:
+        act_resp = supabase.table("actions").select("*").in_("decision_id", list(dec_id_to_rev_id.keys())).execute()
+        for a in (act_resp.data or []):
+            rev_id = dec_id_to_rev_id.get(a.get("decision_id"))
+            if rev_id:
+                actions[rev_id] = a
+                act_id_to_rev_id[a["id"]] = rev_id
+
+    recovery_results = {}
+    if act_id_to_rev_id:
+        rr_resp = supabase.table("recovery_results").select("*").in_("action_id", list(act_id_to_rev_id.keys())).execute()
+        for rr in (rr_resp.data or []):
+            rev_id = act_id_to_rev_id.get(rr.get("action_id"))
+            if rev_id:
+                recovery_results[rev_id] = rr
+
     # ---------------------------------------------------------
     # 3. Format events for frontend
     # ---------------------------------------------------------
@@ -97,9 +133,15 @@ def get_recent_events(limit: int = 20):
         )
 
         metadata = event.get("metadata") or {}
+        eid = event["id"]
+        diag = diagnoses.get(eid)
+        dec = decisions.get(eid)
+        act = actions.get(eid)
+        rr = recovery_results.get(eid)
 
         events.append({
             "id": event["id"],
+            "created_at": event.get("created_at"),
 
             "customer": {
                 "name": customer.get(
@@ -128,11 +170,34 @@ def get_recent_events(limit: int = 20):
                 ),
                 "failure_code": event.get("failure_code"),
                 "mandate_status": event.get("mandate_status"),
+                "created_at": event.get("created_at"),
+                "metadata": metadata,
             },
 
             "type": event_type_label(event.get("event_type", "")),
 
             "status": event["status"],
+            "diagnosis": {
+                "category": diag.get("category"),
+                "confidence": diag.get("confidence"),
+                "reason": diag.get("reason"),
+                "model_version": diag.get("model_version"),
+            } if diag else None,
+            "decision": {
+                "recommended_action": dec.get("recommended_action"),
+                "status": dec.get("status"),
+                "reason": dec.get("reason"),
+            } if dec else None,
+            "action": {
+                "action_type": act.get("action_type"),
+                "status": act.get("status"),
+            } if act else None,
+            "recovery_result": {
+                "success": rr.get("success"),
+                "recovered_amount": float(rr.get("recovered_amount", 0)),
+                "result_code": rr.get("result_code"),
+                "created_at": rr.get("created_at"),
+            } if rr else None,
         })
 
     return events
@@ -230,8 +295,204 @@ def get_dashboard_metrics():
 
 
 # ---------------------------------------------------------
-# DATA HEALTH (TASK 5)
+# CUSTOMERS SUMMARY (TASK 4)
 # ---------------------------------------------------------
+
+def get_customers_summary(limit: int = 200):
+    cust_resp = (
+        supabase
+        .table("customers")
+        .select("id, name, email, phone, created_at")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    customers_list = cust_resp.data or []
+
+    if not customers_list:
+        return []
+
+    cust_ids = [c["id"] for c in customers_list]
+
+    rev_resp = (
+        supabase
+        .table("revenue_events")
+        .select("id, customer_id, amount, status, event_type, failure_code, mandate_status, attempt_count, created_at")
+        .in_("customer_id", cust_ids)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    events_list = rev_resp.data or []
+
+    events_by_customer = {}
+    for ev in events_list:
+        cid = ev.get("customer_id")
+        if cid:
+            events_by_customer.setdefault(cid, []).append(ev)
+
+    unresolved_statuses = {"detected", "failed", "blocked", "pending_customer_action"}
+
+    result = []
+    for c in customers_list:
+        cid = c["id"]
+        c_events = events_by_customer.get(cid, [])
+
+        total_at_risk = sum(
+            float(ev["amount"])
+            for ev in c_events
+            if ev.get("status") in unresolved_statuses
+        )
+
+        total_recovered = sum(
+            float(ev["amount"])
+            for ev in c_events
+            if ev.get("status") == "recovered"
+        )
+
+        recent_ev = c_events[0] if c_events else None
+
+        result.append({
+            "id": cid,
+            "name": c.get("name", "Unknown Customer"),
+            "email": c.get("email"),
+            "phone": c.get("phone"),
+            "created_at": c.get("created_at"),
+            "event_count": len(c_events),
+            "total_at_risk": round(total_at_risk, 2),
+            "total_recovered": round(total_recovered, 2),
+            "recent_event": {
+                "id": recent_ev["id"],
+                "event_type": recent_ev.get("event_type", ""),
+                "type_label": event_type_label(recent_ev.get("event_type", "")),
+                "amount": float(recent_ev.get("amount", 0)),
+                "status": recent_ev.get("status"),
+                "failure_code": recent_ev.get("failure_code"),
+                "created_at": recent_ev.get("created_at"),
+            } if recent_ev else None,
+            "events": [
+                {
+                    "id": ev["id"],
+                    "event_type": ev.get("event_type", ""),
+                    "type_label": event_type_label(ev.get("event_type", "")),
+                    "amount": float(ev.get("amount", 0)),
+                    "status": ev.get("status"),
+                    "failure_code": ev.get("failure_code"),
+                    "mandate_status": ev.get("mandate_status"),
+                    "attempt_count": ev.get("attempt_count", 0),
+                    "created_at": ev.get("created_at"),
+                }
+                for ev in c_events
+            ],
+        })
+
+    return result
+
+
+# ---------------------------------------------------------
+# SUBSCRIPTIONS SUMMARY (TASK 5)
+# ---------------------------------------------------------
+
+def get_subscriptions_summary(limit: int = 200):
+    sub_types = ["subscription.charged.failed", "subscription_failed", "mandate_revoked"]
+
+    rev_resp = (
+        supabase
+        .table("revenue_events")
+        .select("*")
+        .in_("event_type", sub_types)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    events = rev_resp.data or []
+
+    if not events:
+        return []
+
+    cust_ids = list({ev["customer_id"] for ev in events if ev.get("customer_id")})
+    customers = {}
+    if cust_ids:
+        cust_resp = supabase.table("customers").select("id, name, email, phone").in_("id", cust_ids).execute()
+        customers = {c["id"]: c for c in (cust_resp.data or [])}
+
+    event_ids = [ev["id"] for ev in events]
+
+    # Diagnoses
+    diagnoses = {}
+    diag_resp = supabase.table("diagnoses").select("*").in_("revenue_event_id", event_ids).execute()
+    for d in (diag_resp.data or []):
+        if d.get("revenue_event_id"):
+            diagnoses[d["revenue_event_id"]] = d
+
+    # Decisions
+    decisions = {}
+    dec_resp = supabase.table("decisions").select("*").in_("revenue_event_id", event_ids).execute()
+    dec_id_to_rev_id = {}
+    for d in (dec_resp.data or []):
+        if d.get("revenue_event_id"):
+            decisions[d["revenue_event_id"]] = d
+            dec_id_to_rev_id[d["id"]] = d["revenue_event_id"]
+
+    # Actions
+    actions = {}
+    if dec_id_to_rev_id:
+        act_resp = supabase.table("actions").select("*").in_("decision_id", list(dec_id_to_rev_id.keys())).execute()
+        for a in (act_resp.data or []):
+            rev_id = dec_id_to_rev_id.get(a.get("decision_id"))
+            if rev_id:
+                actions[rev_id] = a
+
+    result = []
+    for ev in events:
+        eid = ev["id"]
+        customer = customers.get(ev.get("customer_id"), {})
+        diag = diagnoses.get(eid, {})
+        dec = decisions.get(eid, {})
+        act = actions.get(eid, {})
+
+        result.append({
+            "id": eid,
+            "customer": {
+                "name": customer.get("name", "Unknown Customer"),
+                "email": customer.get("email"),
+                "phone": customer.get("phone"),
+            },
+            "amount": float(ev.get("amount", 0)),
+            "currency": ev.get("currency", "INR"),
+            "event_type": ev.get("event_type", ""),
+            "event_label": event_type_label(ev.get("event_type", "")),
+            "mandate_status": ev.get("mandate_status") or "active",
+            "attempt_count": ev.get("attempt_count", 0),
+            "failure_code": ev.get("failure_code"),
+            "status": ev.get("status"),
+            "created_at": ev.get("created_at"),
+            "diagnosis": {
+                "category": diag.get("category"),
+                "confidence": diag.get("confidence"),
+                "reason": diag.get("reason"),
+            } if diag else None,
+            "decision": {
+                "recommended_action": dec.get("recommended_action"),
+                "status": dec.get("status"),
+                "reason": dec.get("reason"),
+            } if dec else None,
+            "action": {
+                "action_type": act.get("action_type"),
+                "status": act.get("status"),
+            } if act else None,
+            "event": {
+                "event_id": eid,
+                "event_type": ev.get("event_type"),
+                "amount": float(ev.get("amount", 0)),
+                "attempt_count": ev.get("attempt_count", 0),
+                "failure_code": ev.get("failure_code"),
+                "mandate_status": ev.get("mandate_status"),
+            },
+            "type": event_type_label(ev.get("event_type", "")),
+        })
+
+    return result
+
 
 def get_data_health():
     """

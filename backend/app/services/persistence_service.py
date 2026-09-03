@@ -22,6 +22,139 @@ class PersistenceService:
         return response.data[0]
 
     # ---------------------------------------------------------
+    # PROMISES TABLE
+    # ---------------------------------------------------------
+
+    def ensure_promises_table(self):
+        """
+        Create the promises table if it does not exist.
+        This is the minimal schema addition required for Phase 12H.
+        The existing revenue_events schema cannot represent promise
+        lifecycle (promise_date, amount_paid, remaining_amount) cleanly.
+        """
+        try:
+            supabase.table("promises").select("id").limit(1).execute()
+        except Exception:
+            try:
+                supabase.rpc("create_promises_table", {}).execute()
+            except Exception:
+                try:
+                    supabase.postgrest.rpc(
+                        "create_promises_table", {}
+                    ).execute()
+                except Exception:
+                    pass
+
+    def ensure_promises_table_via_raw(self):
+        """
+        Fallback: create table via raw SQL if RPC is not available.
+        Called from startup only.
+        """
+        try:
+            supabase.table("promises").select("id").limit(1).execute()
+            return
+        except Exception:
+            pass
+
+        sql = """
+        CREATE TABLE IF NOT EXISTS promises (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            promise_ref TEXT UNIQUE NOT NULL,
+            invoice_ref TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            customer_email TEXT,
+            promised_amount NUMERIC(12,2) NOT NULL,
+            amount_paid NUMERIC(12,2) DEFAULT 0,
+            promise_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PROMISE_PENDING',
+            escalation_stage INTEGER DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        );
+        """
+        try:
+            supabase.rpc("exec_sql", {"query": sql}).execute()
+        except Exception:
+            try:
+                supabase.postgrest.rpc(
+                    "exec_sql", {"query": sql}
+                ).execute()
+            except Exception:
+                pass
+
+    # ---------------------------------------------------------
+    # PROMISE CRUD
+    # ---------------------------------------------------------
+
+    def create_promise(self, promise_data: dict) -> dict:
+        existing = (
+            supabase
+            .table("promises")
+            .select("*")
+            .eq("promise_ref", promise_data["promise_ref"])
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return existing.data[0]
+
+        return self._insert("promises", promise_data)
+
+    def get_promise_by_ref(self, promise_ref: str) -> dict | None:
+        resp = (
+            supabase
+            .table("promises")
+            .select("*")
+            .eq("promise_ref", promise_ref)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+
+    def get_promise_by_invoice(self, invoice_ref: str) -> dict | None:
+        resp = (
+            supabase
+            .table("promises")
+            .select("*")
+            .eq("invoice_ref", invoice_ref)
+            .eq("status", "PROMISE_PENDING")
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+
+    def get_active_promises(self) -> list:
+        resp = (
+            supabase
+            .table("promises")
+            .select("*")
+            .in_("status", ["PROMISE_PENDING", "PARTIALLY_FULFILLED"])
+            .execute()
+        )
+        return resp.data or []
+
+    def get_all_promises(self) -> list:
+        resp = (
+            supabase
+            .table("promises")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+
+    def update_promise(self, promise_ref: str, updates: dict) -> dict:
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        resp = (
+            supabase
+            .table("promises")
+            .update(updates)
+            .eq("promise_ref", promise_ref)
+            .execute()
+        )
+        return resp.data[0] if resp.data else {}
+
+    # ---------------------------------------------------------
     # WEBHOOK
     # ---------------------------------------------------------
 

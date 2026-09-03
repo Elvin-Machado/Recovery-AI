@@ -10,13 +10,15 @@ function Dashboard() {
 
   async function loadDashboard() {
     try {
+      setLoading(true);
       setError(null);
 
       const data = await getDashboard();
 
       setDashboard(data);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to connect to backend server");
+      setDashboard(null);
     } finally {
       setLoading(false);
     }
@@ -28,6 +30,7 @@ function Dashboard() {
 
       setDashboard(data);
     } catch (err) {
+      setError(err.message || "Failed to connect to backend server");
     }
   }
 
@@ -43,11 +46,11 @@ function Dashboard() {
     );
   }
 
-  if (error) {
+  if (error || !dashboard) {
     return (
       <main className="dashboard">
         <h1>Unable to load dashboard</h1>
-        <p>{error}</p>
+        <p>{error || "Backend connection refused. Ensure backend server is running on http://127.0.0.1:8000."}</p>
 
         <button
           type="button"
@@ -83,25 +86,25 @@ function Dashboard() {
       <section className="stats-grid">
         <StatCard
           label="Revenue at Risk"
-          value={`₹${dashboard.revenue_at_risk.toLocaleString("en-IN")}`}
+          value={`₹${(dashboard?.revenue_at_risk ?? 0).toLocaleString("en-IN")}`}
           description="Events requiring attention"
         />
 
         <StatCard
           label="Recovered"
-          value={`₹${dashboard.recovered.toLocaleString("en-IN")}`}
+          value={`₹${(dashboard?.recovered ?? 0).toLocaleString("en-IN")}`}
           description="Recovered revenue"
         />
 
         <StatCard
           label="Recovery Opportunities"
-          value={dashboard.opportunities}
+          value={dashboard?.opportunities ?? 0}
           description="Across revenue events"
         />
 
         <StatCard
           label="Blocked Actions"
-          value={dashboard.blocked_actions}
+          value={dashboard?.blocked_actions ?? 0}
           description="Stopped by policy engine"
         />
       </section>

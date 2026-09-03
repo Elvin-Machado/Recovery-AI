@@ -17,6 +17,22 @@ class RecoveryMLService:
 
     def predict_recovery(self, payment_data: dict) -> dict:
         input_df = pd.DataFrame([payment_data])
+        
+        # Intercept unsupported event types
+        event_type = payment_data.get("event_type")
+        if event_type in ["checkout.abandoned", "b2b.receivable.overdue", "promise.broken"]:
+            return {
+                "recovery_probability": None,
+                "predicted_recoverable": None,
+                "prediction_unavailable": True
+            }
+        
+        # Handle None explicitly as pandas/sklearn expect it
+        input_df['failure_code'] = input_df['failure_code'].fillna('missing')
+        if 'mandate_status' in input_df:
+            input_df['mandate_status'] = input_df['mandate_status'].fillna('missing')
+        else:
+            input_df['mandate_status'] = 'missing'
 
         probability = self.model.predict_proba(
             input_df
