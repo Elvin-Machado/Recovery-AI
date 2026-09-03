@@ -3,7 +3,7 @@
 > **Hackathon Track 03 — AI Revenue Recovery**  
 > *"AI recommends. Policy controls. Recovery executes. Measurement proves."*
 
-RecoverAI is an autonomous, policy-bounded AI revenue recovery platform engineered for subscription and payment failure workflows. It processes payment signals, diagnoses root causes using machine learning models and domain heuristics, evaluates business policy boundaries, and automates recovery interventions—from smart payment retries to B2B promise-to-pay tracking—with full financial measurement and auditability.
+RecoverAI is a policy-bounded AI revenue recovery platform engineered for subscription and payment failure workflows. It processes payment signals, diagnoses root causes using machine learning models and domain heuristics, evaluates business policy boundaries, and automates recovery interventions—from smart payment retries to B2B promise-to-pay tracking—with full financial measurement and auditability.
 
 ---
 
@@ -33,7 +33,7 @@ Detect → Diagnose → Decide → Policy/Guardrails → Act → Measure → Aud
 4. **Policy/Guardrails**: Strict policy engine validates actions against safety rules (retry limits, mandate status, chaser caps, promise protection).
 5. **Act**: Execute approved interventions (controlled retry, payment reminder, method update request, escalation).
 6. **Measure**: Track financial recovery amounts and intervention costs to quantify net revenue recovered.
-7. **Audit**: Persist an immutable record of every signal, diagnosis, policy check, and action outcome.
+7. **Audit**: Persist a complete audit record of every signal, diagnosis, policy check, and action outcome.
 
 ---
 
@@ -72,7 +72,7 @@ graph TD
 | **B2B Receivables Chasing** | Tiered payment reminders (first, second, final) capped at 3 attempts |
 | **Promise-to-Pay Tracking** | Dedicated state machine (`PROMISE_PENDING` → `PARTIALLY_FULFILLED` / `FULFILLED` / `BROKEN` → `ESCALATED`) |
 | **Bounded Recovery Actions** | Policy engine guarantees AI recommendations never execute outside business limits |
-| **Idempotency** | Webhook SHA-256 signature verification and payload deduplication |
+| **Idempotency** | Duplicate event IDs, transaction IDs, checkout IDs, subscription attempts, B2B chase IDs, promise references, and batch IDs are safely deduplicated. |
 | **Auditability** | Full trace recorded per event explaining why actions were allowed, blocked, or executed |
 | **Economic Measurement** | Net recovery calculation factoring intervention execution costs |
 
@@ -226,7 +226,7 @@ The RecoverAI frontend provides full operational visibility across 9 dedicated v
 - **Simulator**: Test sandbox to trigger individual recovery scenarios or execute the 10-scenario demo batch.
 - **Analytics**: Recovery domain breakdown, net financial ROI, and policy block rationale charts.
 
-### Immutable Audit Trail
+### Audit Trail
 Every workflow step persists to Supabase PostgreSQL, recording exactly **why** an action was allowed, blocked, or marked for customer action, providing complete compliance and operational transparency.
 
 ---
