@@ -46,8 +46,12 @@ class RecoveryAgent:
 
         else:
 
+            action_status = "blocked"
+            if payment_data.get("current_status") == "PROMISE_PENDING":
+                action_status = "pending_customer_action"
+
             action_result = {
-                "status": "blocked",
+                "status": action_status,
                 "action": recommended_action,
                 "amount_recovered": 0
             }

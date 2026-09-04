@@ -33,7 +33,7 @@ function Receivables() {
     } else if (presetName === 'escalation') {
       setFormData({ ...formData, customer_name: "Global Industries", current_status: 'OVERDUE', attempt_count: 3, days_overdue: 45, simulated_customer_action: 'ignored' });
     } else if (presetName === 'promise') {
-      setFormData({ ...formData, customer_name: "Promise Corp", current_status: 'OVERDUE', attempt_count: 1, days_overdue: 15, simulated_customer_action: 'promise_pending' });
+      setFormData({ ...formData, customer_name: "Promise Corp", current_status: 'PROMISE_PENDING', attempt_count: 1, days_overdue: 15, simulated_customer_action: 'promise_pending' });
     } else if (presetName === 'paid') {
       setFormData({ ...formData, customer_name: "Paid Systems", current_status: 'PAID', attempt_count: 2, days_overdue: 12, simulated_customer_action: 'paid' });
     }

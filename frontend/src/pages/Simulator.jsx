@@ -68,7 +68,7 @@ function Simulator() {
       if (presetName === 'recoverable') {
         setFormData({ ...formData, customer_name: "Recoverable Demo User", outcome: 'failed', failure_code: 'insufficient_funds', mandate_status: 'active', previous_successful_payments: 45, attempt_count: 0 });
       } else if (presetName === 'blocked') {
-        setFormData({ ...formData, customer_name: "Blocked Demo User", outcome: 'failed', failure_code: 'account_closed', mandate_status: 'revoked', previous_successful_payments: 2, attempt_count: 3 });
+        setFormData({ ...formData, customer_name: "Blocked Demo User", outcome: 'failed', failure_code: 'insufficient_funds', mandate_status: 'active', previous_successful_payments: 45, attempt_count: 3 });
       } else if (presetName === 'pending') {
         setFormData({ ...formData, customer_name: "Pending Demo User", outcome: 'failed', failure_code: 'card_expired', mandate_status: 'inactive', attempt_count: 1 });
       } else if (presetName === 'success') {
