@@ -9,11 +9,11 @@ def recommend_action(
 
     if diagnosis == "invoice_overdue":
         attempt = payment_data.get("attempt_count", 0)
-        if attempt == 0:
+        if attempt == 1:
             return "send_payment_reminder"
-        elif attempt == 1:
-            return "second_payment_reminder"
         elif attempt == 2:
+            return "second_payment_reminder"
+        elif attempt == 3:
             return "final_payment_reminder"
         else:
             return "escalate_receivable"

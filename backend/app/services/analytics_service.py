@@ -27,6 +27,14 @@ _AI_EVALUATED_DIAGNOSES = {
     "hard_decline", "risk_block", "mandate_revoked", "unknown_failure",
 }
 
+# Statuses that represent unresolved economic exposure (matches dashboard)
+_UNRESOLVED_STATUSES = {
+    "detected",
+    "failed",
+    "blocked",
+    "pending_customer_action",
+}
+
 
 def _classify_source(event_type: str) -> str:
     if not event_type:
@@ -46,7 +54,7 @@ def _load_all():
     """Load all data in bulk, return pre-joined structures."""
     events = (
         supabase.table("revenue_events")
-        .select("id, event_type, amount, status, created_at")
+        .select("id, event_type, amount, status, created_at, customer_id")
         .execute()
     ).data or []
 
@@ -110,7 +118,38 @@ def _load_all():
     except Exception:
         promises = []
 
-    return events, diagnoses, decisions, actions_by_revid, recovery_results, promises
+    # Customer name lookup (needed for promise deduplication against B2B events)
+    customers: dict[str, str] = {}
+    cust_ids = list({ev["customer_id"] for ev in events if ev.get("customer_id")})
+    if cust_ids:
+        try:
+            cust_resp = (
+                supabase.table("customers")
+                .select("id, name")
+                .in_("id", cust_ids)
+                .execute()
+            )
+            customers = {c["id"]: c["name"] for c in (cust_resp.data or [])}
+        except Exception:
+            customers = {}
+
+    return events, diagnoses, decisions, actions_by_revid, recovery_results, promises, customers
+
+
+def _promise_dup_set(events: list, customers: dict) -> set[tuple[str, float]]:
+    """Build a set of (customer_name, amount) from B2B receivable revenue events.
+
+    Any promise whose (customer_name, promised_amount) matches an entry here
+    has its economic exposure already represented by the corresponding revenue
+    event and must NOT be added a second time to aggregate risk figures.
+    """
+    dup: set[tuple[str, float]] = set()
+    for ev in events:
+        if ev.get("event_type") == "b2b.receivable.overdue":
+            cname = customers.get(ev.get("customer_id"), "")
+            if cname:
+                dup.add((cname, float(ev.get("amount", 0))))
+    return dup
 
 
 # ---------------------------------------------------------
@@ -118,13 +157,21 @@ def _load_all():
 # ---------------------------------------------------------
 
 def compute_summary() -> dict:
-    events, diagnoses, decisions, actions_by_revid, recovery_results, promises = _load_all()
+    events, diagnoses, decisions, actions_by_revid, recovery_results, promises, customers = _load_all()
 
-    total_at_risk = sum(float(ev["amount"]) for ev in events)
+    dup_set = _promise_dup_set(events, customers)
+
+    # BUG 1 FIX: Only count unresolved events (exclude "recovered") to
+    # match the dashboard's revenue-at-risk definition.
+    total_at_risk = sum(
+        float(ev["amount"]) for ev in events
+        if ev["status"] in _UNRESOLVED_STATUSES
+    )
     total_at_risk += sum(
         float(p["promised_amount"]) - float(p.get("amount_paid", 0))
         for p in promises
         if p.get("status") in {"PROMISE_PENDING", "PARTIALLY_FULFILLED", "BROKEN", "ESCALATED"}
+        and (p.get("customer_name", ""), float(p.get("promised_amount", 0))) not in dup_set
     )
 
     ai_evaluated = 0
@@ -160,8 +207,8 @@ def compute_summary() -> dict:
                 executed += 1
             if s == "pending_customer_action":
                 pending += 1
-            if s == "blocked":
-                blocked += 1
+            # BUG 2 FIX: Do NOT count action.status=="blocked" here.
+            # Blocked is already counted once at the decision level above.
 
             rr = recovery_results.get(act["id"])
             if rr and rr.get("success") and float(rr.get("recovered_amount", 0)) > 0:
@@ -171,6 +218,10 @@ def compute_summary() -> dict:
     promise_recovered = 0
     promise_amount_recovered = 0.0
     for p in promises:
+        # Skip promises already represented by a B2B receivable revenue event
+        # to avoid double-counting economic exposure
+        if (p.get("customer_name", ""), float(p.get("promised_amount", 0))) in dup_set:
+            continue
         det_evaluated += 1  # promises follow deterministic/policy evaluation
         if p.get("status") == "FULFILLED":
             promise_recovered += 1
@@ -189,7 +240,7 @@ def compute_summary() -> dict:
     economic_efficiency = net_recovery / total_intervention_cost if total_intervention_cost > 0 else 0.0
 
     return {
-        "total_cases": len(events) + len(promises),
+        "total_cases": len(events) + len([p for p in promises if (p.get("customer_name", ""), float(p.get("promised_amount", 0))) not in dup_set]),
         "total_amount_at_risk": round(total_at_risk, 2),
         "ai_evaluated": ai_evaluated,
         "deterministic_evaluated": det_evaluated,
@@ -223,7 +274,9 @@ def _init_cat(name):
 
 
 def compute_category_breakdown() -> list[dict]:
-    events, diagnoses, decisions, actions_by_revid, recovery_results, promises = _load_all()
+    events, diagnoses, decisions, actions_by_revid, recovery_results, promises, customers = _load_all()
+
+    dup_set = _promise_dup_set(events, customers)
 
     cats = {
         "payment_failure": _init_cat("Payment Failure"),
@@ -257,8 +310,6 @@ def compute_category_breakdown() -> list[dict]:
                 cat["pending"] += 1
             elif s in {"success", "failed", "escalated"}:
                 cat["executed"] += 1
-            elif s == "blocked":
-                cat["blocked"] += 1
 
             rr = recovery_results.get(act["id"])
             if rr and rr.get("success") and float(rr.get("recovered_amount", 0)) > 0:
@@ -274,6 +325,9 @@ def compute_category_breakdown() -> list[dict]:
     # Promises
     pcat = cats["promise"]
     for p in promises:
+        # Skip promises already represented by a B2B receivable revenue event
+        if (p.get("customer_name", ""), float(p.get("promised_amount", 0))) in dup_set:
+            continue
         pcat["cases"] += 1
         promised = float(p.get("promised_amount", 0))
         paid = float(p.get("amount_paid", 0))

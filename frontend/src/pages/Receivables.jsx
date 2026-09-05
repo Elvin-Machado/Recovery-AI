@@ -29,7 +29,7 @@ function Receivables() {
     setError(null);
     
     if (presetName === 'new_overdue') {
-      setFormData({ ...formData, customer_name: "Tech Solutions Ltd.", current_status: 'OVERDUE', attempt_count: 0, days_overdue: 3, simulated_customer_action: 'ignored' });
+      setFormData({ ...formData, customer_name: "Enterprise Tech Ltd", current_status: 'OVERDUE', attempt_count: 1, days_overdue: 15, amount: "30000", simulated_customer_action: 'ignored' });
     } else if (presetName === 'escalation') {
       setFormData({ ...formData, customer_name: "Global Industries", current_status: 'OVERDUE', attempt_count: 3, days_overdue: 45, simulated_customer_action: 'ignored' });
     } else if (presetName === 'promise') {
